@@ -6,24 +6,37 @@ package mr
 // remember to capitalize all names.
 //
 
-import "os"
-import "strconv"
+import (
+	"os"
+	"strconv"
+)
 
+// RPCArgs Argument struct for RPC Calls
+// The RPCType indicates what kind of call
+// this specified call is.
+// if 0, it is a call asking for map or reduce
+// if 1, it is a call sharing the result of mapping
+// if 2, it is a call sharing the result of reducing
 //
-// example to show how to declare the arguments
-// and reply for an RPC.
-//
-
-type ExampleArgs struct {
-	X int
+type RPCArgs struct {
+	RPCType int
+	Mapped  []KeyValue
+	Reduced KeyValue
 }
 
-type ExampleReply struct {
-	Y int
+// RPCReply The WorkType indicates what kind of call
+// this specified call is.
+// if 0, it is a call assigning the job of mapping
+// in this case, it provides an array of strings to be mapped
+// if 1, it is a call assigning the job of reducing
+// in this case, it provides an array of maps to be reduced
+type RPCReply struct {
+	WorkType    int
+	MapInput    []string
+	ReduceInput []KeyValue
 }
 
 // Add your RPC definitions here.
-
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the master.

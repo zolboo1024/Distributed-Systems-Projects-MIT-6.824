@@ -20,7 +20,7 @@ import (
 //
 type RPCArgs struct {
 	RPCType int
-	Mapped  []KeyValue
+	Mapped  KeyValue
 	Reduced KeyValue
 }
 
@@ -32,7 +32,7 @@ type RPCArgs struct {
 // in this case, it provides an array of maps to be reduced
 type RPCReply struct {
 	WorkType    int
-	MapInput    []string
+	MapInput    string
 	ReduceInput []KeyValue
 }
 

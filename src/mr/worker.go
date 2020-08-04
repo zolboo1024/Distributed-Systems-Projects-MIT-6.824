@@ -1,10 +1,11 @@
 package mr
 
-import "fmt"
-import "log"
-import "net/rpc"
-import "hash/fnv"
-
+import (
+	"fmt"
+	"hash/fnv"
+	"log"
+	"net/rpc"
+)
 
 //
 // Map functions return a slice of KeyValue.
@@ -24,7 +25,6 @@ func ihash(key string) int {
 	return int(h.Sum32() & 0x7fffffff)
 }
 
-
 //
 // main/mrworker.go calls this function.
 //
@@ -38,27 +38,16 @@ func Worker(mapf func(string, string) []KeyValue,
 
 }
 
-//
-// example function to show how to make an RPC call to the master.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-func CallExample() {
+// CallMaster Function makes RPC call to the master
+// Calls the RPCHandler function in the master asking for a task
+// and then waits for a reply
 
-	// declare an argument structure.
-	args := ExampleArgs{}
-
-	// fill in the argument(s).
-	args.X = 99
-
-	// declare a reply structure.
-	reply := ExampleReply{}
-
-	// send the RPC request, wait for the reply.
-	call("Master.Example", &args, &reply)
-
-	// reply.Y should be 100.
-	fmt.Printf("reply.Y %v\n", reply.Y)
+func CallMaster(args *RPCArgs) *RPCReply {
+	//Declare a type of RPCReply to save the reply
+	reply := RPCReply{}
+	//send the RPC request and wait for the reply
+	call("Master.RPCHandler", args, &reply)
+	return &reply
 }
 
 //

@@ -19,9 +19,10 @@ import (
 // if 2, it is a call sharing the result of reducing
 //
 type RPCArgs struct {
-	RPCType int
-	Mapped  KeyValue
-	Reduced KeyValue
+	RPCType    int
+	Mapped     []KeyValue
+	Reduced    KeyValue
+	ReducedArr []KeyValue
 }
 
 // RPCReply The WorkType indicates what kind of call
@@ -30,10 +31,13 @@ type RPCArgs struct {
 // in this case, it provides an array of strings to be mapped
 // if 1, it is a call assigning the job of reducing
 // in this case, it provides an array of maps to be reduced
+// if 2, it means there is nothing to assign to the worker at the time
 type RPCReply struct {
-	WorkType    int
-	MapInput    string
-	ReduceInput []KeyValue
+	WorkType     int
+	MapInput     string
+	ReduceArr    []KeyValue
+	ReduceStart  int
+	ReduceFinish int
 }
 
 // Add your RPC definitions here.

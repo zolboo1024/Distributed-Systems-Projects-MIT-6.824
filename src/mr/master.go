@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
+	"sort"
 )
 
 //
@@ -26,31 +27,53 @@ type Master struct {
 	CurMapped  int
 	Reduced    []KeyValue
 	CurReduced int
+	DoneVar    bool
 }
+
+// for sorting by key.
+type ByKey []KeyValue
+
+// for sorting by key.
+func (a ByKey) Len() int           { return len(a) }
+func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // RPCHandler is called by the worker to request
 // Various RPC calls
 func (m *Master) RPCHandler(args *RPCArgs, reply *RPCReply) error {
 	//In this case, we give tasks
 	if args.RPCType == 0 {
-		//In this case, send a word to be mapped
+		//In this case, send a file to be mapped
 		if m.CurFiles < len(m.Files) {
 			reply.WorkType = 0
 			reply.MapInput = m.Files[m.CurFiles]
 			m.CurFiles = m.CurFiles + 1
-		}
-		//In this case, send all the specific mapped inputs to be reduced
-		if m.CurMapped < m.NReduce {
+		} else if m.CurFiles == len(m.Files) {
+			sort.Sort(ByKey(m.Mapped))
+			m.CurFiles = m.CurFiles + 1
+		} else if m.CurMapped < len(m.Mapped) {
+			//In this case, send all the specific mapped inputs to be reduced
+			//inputs: the current key and the entire intermediate array of pairs
 			reply.WorkType = 1
-			//come back to this
+			j := m.CurMapped + 1 //get the current checkpoint
+			for j < len(m.Mapped) && m.Mapped[j].Key == m.Mapped[m.CurMapped].Key {
+				j++
+			}
+			reply.ReduceArr = m.Mapped
+			reply.ReduceStart = m.CurMapped
+			reply.ReduceFinish = j
+			m.CurMapped = j
+		} else {
+			//In this case, there is nothing to be assigned to worker at the moment
+			reply.WorkType = 2
+			m.DoneVar = true
 		}
-
 	} else {
 		//In this case, the RPC was called by the worker to send processed output
 		//we handle their input and store it into a mapped or reduced array
 		//In this case, receive the mapped key pair and append it to the Mapped array
 		if args.RPCType == 1 {
-			m.Mapped = append(m.Mapped, args.Mapped)
+			m.Mapped = append(m.Mapped, args.Mapped...)
 		}
 		//In this case, receive the reduced key pair and append it to the Reduced array
 		if args.RPCType == 2 {
@@ -82,9 +105,9 @@ func (m *Master) server() {
 //
 func (m *Master) Done() bool {
 	ret := false
-
-	// Your code here.
-
+	if m.DoneVar == true {
+		ret = true
+	}
 	return ret
 }
 
@@ -102,8 +125,9 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m.CurFiles = 0
 	m.CurMapped = 0
 	m.CurReduced = 0
-	mapped := []string{}
-	reduced := []string{}
+	m.DoneVar = false
+	mapped := []KeyValue{}
+	reduced := []KeyValue{}
 	m.Mapped = mapped
 	m.Reduced = reduced
 	m.server()

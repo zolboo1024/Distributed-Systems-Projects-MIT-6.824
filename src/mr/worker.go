@@ -3,12 +3,14 @@ package mr
 import (
 	"fmt"
 	"hash/fnv"
+	"io/ioutil"
 	"log"
 	"net/rpc"
+	"os"
 )
 
 //
-// Map functions return a slice of KeyValue.
+// KeyValue : Map functions return a slice of KeyValue.
 //
 type KeyValue struct {
 	Key   string
@@ -30,18 +32,54 @@ func ihash(key string) int {
 //
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
-
-	// Your worker implementation here.
-
-	// uncomment to send the Example RPC to the master.
-	// CallExample()
-
+	//the very first worker RPC call to the master
+	initialRPC := RPCArgs{}
+	initialRPC.RPCType = 0
+	currentreply := CallMaster(&initialRPC)
+	worktype := currentreply.WorkType
+	//as long as the master has task to give, it keeps working
+	for worktype == 0 || worktype == 1 {
+		if worktype == 0 {
+			//in this case, the master assigns mapping task
+			//so, the worker opens up the file and maps it
+			filename := currentreply.MapInput
+			file, err := os.Open(currentreply.MapInput)
+			if err != nil {
+				log.Fatalf("cannot open %v", filename)
+			}
+			content, err := ioutil.ReadAll(file)
+			if err != nil {
+				log.Fatalf("cannot read %v", filename)
+			}
+			file.Close()
+			kva := mapf(filename, string(content))
+			//return the mapped instance of this file
+			rpctoreturn := RPCArgs{}
+			rpctoreturn.RPCType = 1
+			rpctoreturn.Mapped = kva
+			_ = CallMaster(&rpctoreturn)
+		} else if worktype == 1 {
+			//in this case, the master assigns reducing task
+			//so, the worker reduces the intermediate arr using the specified key
+			values := []string{}
+			reducedarr := currentreply.ReduceArr[:]
+			i := currentreply.ReduceStart
+			j := currentreply.ReduceFinish
+			for k := i; k < j; k++ {
+				values = append(values, reducedarr[k].Value)
+			}
+			output := reducef(reducedarr[i].Key, values)
+			// this is the format for each line of Reduce output.
+			oname := "mr-out-0"
+			ofile, _ := os.Create(oname)
+			fmt.Fprintf(ofile, "%v %v\n", reducedarr[i].Key, output)
+		}
+	}
 }
 
 // CallMaster Function makes RPC call to the master
 // Calls the RPCHandler function in the master asking for a task
 // and then waits for a reply
-
 func CallMaster(args *RPCArgs) *RPCReply {
 	//Declare a type of RPCReply to save the reply
 	reply := RPCReply{}

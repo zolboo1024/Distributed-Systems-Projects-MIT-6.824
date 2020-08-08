@@ -74,6 +74,8 @@ func Worker(mapf func(string, string) []KeyValue,
 			ofile, _ := os.Create(oname)
 			fmt.Fprintf(ofile, "%v %v\n", reducedarr[i].Key, output)
 		}
+		currentreply = CallMaster(&initialRPC)
+		worktype = currentreply.WorkType
 	}
 }
 

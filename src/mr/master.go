@@ -38,14 +38,21 @@ func (a ByKey) Len() int           { return len(a) }
 func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
+const WORKER_NEEDTASK = 0
+const WORKER_MAPRESULT = 1
+const WORKER_REDUCERESULT = 2
+const MASTER_ASSIGNMAP = 0
+const MASTER_ASSIGNREDUCE = 1
+const MASTER_EMPTYTASK = 2
+
 // RPCHandler is called by the worker to request
 // Various RPC calls
 func (m *Master) RPCHandler(args *RPCArgs, reply *RPCReply) error {
 	//In this case, we give tasks
-	if args.RPCType == 0 {
+	if args.RPCType == WORKER_NEEDTASK {
 		//In this case, send a file to be mapped
 		if m.CurFiles < len(m.Files) {
-			reply.WorkType = 0
+			reply.WorkType = MASTER_ASSIGNMAP
 			reply.MapInput = m.Files[m.CurFiles]
 			m.CurFiles = m.CurFiles + 1
 		} else if m.CurFiles == len(m.Files) {
@@ -54,7 +61,7 @@ func (m *Master) RPCHandler(args *RPCArgs, reply *RPCReply) error {
 		} else if m.CurMapped < len(m.Mapped) {
 			//In this case, send all the specific mapped inputs to be reduced
 			//inputs: the current key and the entire intermediate array of pairs
-			reply.WorkType = 1
+			reply.WorkType = MASTER_ASSIGNREDUCE
 			j := m.CurMapped + 1 //get the current checkpoint
 			for j < len(m.Mapped) && m.Mapped[j].Key == m.Mapped[m.CurMapped].Key {
 				j++
@@ -65,18 +72,18 @@ func (m *Master) RPCHandler(args *RPCArgs, reply *RPCReply) error {
 			m.CurMapped = j
 		} else {
 			//In this case, there is nothing to be assigned to worker at the moment
-			reply.WorkType = 2
+			reply.WorkType = MASTER_EMPTYTASK
 			m.DoneVar = true
 		}
 	} else {
 		//In this case, the RPC was called by the worker to send processed output
 		//we handle their input and store it into a mapped or reduced array
 		//In this case, receive the mapped key pair and append it to the Mapped array
-		if args.RPCType == 1 {
+		if args.RPCType == WORKER_MAPRESULT {
 			m.Mapped = append(m.Mapped, args.Mapped...)
 		}
-		//In this case, receive the reduced key pair and append it to the Reduced array
-		if args.RPCType == 2 {
+		//In this case, recEive the reduced key pair and append it to the Reduced array
+		if args.RPCType == WORKER_REDUCERESULT {
 			m.Reduced = append(m.Reduced, args.Reduced)
 		}
 	}

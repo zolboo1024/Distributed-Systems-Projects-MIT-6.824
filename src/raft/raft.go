@@ -43,7 +43,9 @@ type ApplyMsg struct {
 	Command      interface{}
 	CommandIndex int
 }
-
+const LEADER = 1
+const FOLLOWER = 2
+const CANDIDATE = 3
 //
 // A Go object implementing a single Raft peer.
 //
@@ -54,6 +56,7 @@ type Raft struct {
 	me          int                 // this peer's index into peers[]
 	dead        int32               // set by Kill()
 	currentTerm int
+	state 		int 				// determines what kind of server this current one is
 	votedFor    int
 	log         []LogEntry
 	//Volatile state variables
@@ -63,6 +66,10 @@ type Raft struct {
 	nextIndex  []int
 	matchIndex []int
 }
+
+//
+// A model for a long entry in state of the machines
+//
 type LogEntry struct {
 	command string
 	termID  int
@@ -71,10 +78,11 @@ type LogEntry struct {
 // return currentTerm and whether this server
 // believes it is the leader.
 func (rf *Raft) GetState() (int, bool) {
-
 	var term int
-	var isleader bool
+	isleader := false
 	// Your code here (2A).
+	term = rf.currentTerm
+	if(rf.currentTerm)
 	return term, isleader
 }
 
@@ -237,7 +245,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.me = me
 
 	// Your initialization code here (2A, 2B, 2C).
-
+	
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 

@@ -43,9 +43,11 @@ type ApplyMsg struct {
 	Command      interface{}
 	CommandIndex int
 }
+
 const LEADER = 1
 const FOLLOWER = 2
 const CANDIDATE = 3
+
 //
 // A Go object implementing a single Raft peer.
 //
@@ -56,9 +58,13 @@ type Raft struct {
 	me          int                 // this peer's index into peers[]
 	dead        int32               // set by Kill()
 	currentTerm int
-	state 		int 				// determines what kind of server this current one is
+	state       int // determines what kind of server this current one is
 	votedFor    int
 	log         []LogEntry
+	grantedVote chan bool
+	heartbeat   chan bool
+	leaderchan  chan bool
+	commitchan  chan bool
 	//Volatile state variables
 	commitIndex int
 	lastApplied int
@@ -73,6 +79,8 @@ type Raft struct {
 type LogEntry struct {
 	command string
 	termID  int
+	logID   int
+	logTerm int
 }
 
 // return currentTerm and whether this server
@@ -80,9 +88,10 @@ type LogEntry struct {
 func (rf *Raft) GetState() (int, bool) {
 	var term int
 	isleader := false
-	// Your code here (2A).
 	term = rf.currentTerm
-	if(rf.currentTerm)
+	if rf.state == LEADER {
+		isleader = true
+	}
 	return term, isleader
 }
 
@@ -129,22 +138,51 @@ func (rf *Raft) readPersist(data []byte) {
 // field names must start with capital letters!
 //
 type RequestVoteArgs struct {
-	// Your data here (2A, 2B).
+	Term         int //which term it is requesting the vote for
+	CandidateID  int //candidate requesting the vote
+	LastLogIndex int //index of the last log entry
+	LastLogTerm  int //term of candidate's last log entry
 }
 
 //
-// example RequestVote RPC reply structure.
+//Reply false if term<currentTerm
 // field names must start with capital letters!
 //
 type RequestVoteReply struct {
-	// Your data here (2A).
+	Term        int
+	VoteGranted bool //true means the candidate received a vote
 }
 
 //
 // example RequestVote RPC handler.
 //
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
-	// Your code here (2A, 2B).
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	reply.VoteGranted = false
+	if args.Term != rf.currentTerm { //check if the requester term is up to date
+		reply.Term = rf.currentTerm
+		return
+	}
+	term := rf.lastTerm()
+	index := rf.lastIndex()
+	if args.LastLogTerm > term || (args.LastLogTerm == term && args.LastLogIndex >= index) {
+		// if it is up to date and it has not voted, request the vote
+		if rf.votedFor == -1 || rf.votedFor == args.CandidateID {
+			rf.grantedVote <- true
+			rf.state = FOLLOWER
+			reply.VoteGranted = true
+			rf.votedFor = args.CandidateID
+			//fmt.Printf("%v currentTerm:%v vote for:%v term:%v",rf.me,rf.currentTerm,args.CandidateId,args.Term)
+		}
+	}
+}
+
+func (rf *Raft) lastIndex() int {
+	return rf.log[len(rf.log)-1].logID
+}
+func (rf *Raft) lastTerm() int {
+	return rf.log[len(rf.log)-1].logID
 }
 
 //
@@ -245,7 +283,14 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.me = me
 
 	// Your initialization code here (2A, 2B, 2C).
-	
+	rf.state = FOLLOWER
+	rf.heartbeat = make(chan bool, 100)
+	rf.votedFor = -1
+	rf.log = append(rf.log, LogEntry{logTerm: 0})
+	rf.currentTerm = 0
+	rf.commitchan = make(chan bool, 100)
+	rf.grantedVote = make(chan bool, 100)
+	rf.leaderchan = make(chan bool, 100)
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 

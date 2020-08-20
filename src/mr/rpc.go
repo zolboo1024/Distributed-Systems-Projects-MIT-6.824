@@ -14,9 +14,9 @@ import (
 // RPCArgs Argument struct for RPC Calls
 // The RPCType indicates what kind of call
 // this specified call is.
-// if 0, it is a call asking for map or reduce
-// if 1, it is a call sharing the result of mapping
-// if 2, it is a call sharing the result of reducing
+// if WORKER_NEEDTASK, it is a call asking for map or reduce
+// if WORKER_MAPRESULT, it is a call sharing the result of mapping
+// if WORKER_REDUCERESULT, it is a call sharing the result of reducing
 //
 type RPCArgs struct {
 	RPCType    int
@@ -27,11 +27,11 @@ type RPCArgs struct {
 
 // RPCReply The WorkType indicates what kind of call
 // this specified call is.
-// if 0, it is a call assigning the job of mapping
+// if MASTER_ASSIGNMAP, it is a call assigning the job of mapping
 // in this case, it provides an array of strings to be mapped
-// if 1, it is a call assigning the job of reducing
+// if MASTER_ASSIGNREDUCE, it is a call assigning the job of reducing
 // in this case, it provides an array of maps to be reduced
-// if 2, it means there is nothing to assign to the worker at the time
+// if MASTER_EMPTYTASK, it means there is nothing to assign to the worker at the time
 type RPCReply struct {
 	WorkType     int
 	MapInput     string

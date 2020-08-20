@@ -38,8 +38,8 @@ func Worker(mapf func(string, string) []KeyValue,
 	currentreply := CallMaster(&initialRPC)
 	worktype := currentreply.WorkType
 	//as long as the master has task to give, it keeps working
-	for worktype == 0 || worktype == 1 {
-		if worktype == 0 {
+	for worktype == MASTER_ASSIGNMAP || worktype == MASTER_ASSIGNREDUCE {
+		if worktype == MASTER_ASSIGNMAP {
 			//in this case, the master assigns mapping task
 			//so, the worker opens up the file and maps it
 			filename := currentreply.MapInput
@@ -55,10 +55,10 @@ func Worker(mapf func(string, string) []KeyValue,
 			kva := mapf(filename, string(content))
 			//return the mapped instance of this file
 			rpctoreturn := RPCArgs{}
-			rpctoreturn.RPCType = 1
+			rpctoreturn.RPCType = WORKER_MAPRESULT
 			rpctoreturn.Mapped = kva
 			_ = CallMaster(&rpctoreturn)
-		} else if worktype == 1 {
+		} else if worktype == MASTER_ASSIGNREDUCE {
 			//in this case, the master assigns reducing task
 			//so, the worker reduces the intermediate arr using the specified key
 			values := []string{}

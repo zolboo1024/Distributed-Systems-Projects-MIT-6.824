@@ -266,6 +266,69 @@ func (rf *Raft) killed() bool {
 	return z == 1
 }
 
+type AppendEntriesArgs struct {
+	// Your data here.
+	Term         int
+	LeaderId     int
+	PrevLogTerm  int
+	PrevLogIndex int
+	Entries      []LogEntry
+	LeaderCommit int
+}
+
+type AppendEntriesReply struct {
+	// Your data here.
+	Term       int
+	Successful bool
+	NextIndex  int
+}
+
+//AppendEntries method that is called everytime the leader sends a request to the
+//replicas to update the log
+func (rf *Raft) AppendEntries(args AppendEntriesArgs, reply *AppendEntriesReply) {
+	// Your code here.
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	defer rf.persist()
+
+	if args.Term < rf.currentTerm { //since the term does not match and lags behind
+		reply.Successful = false
+		return
+	}
+	rf.heartbeat <- true
+	if args.Term > rf.currentTerm { //the current term is updated
+		rf.currentTerm = args.Term
+		rf.state = FOLLOWER //has to be in the follower state
+		rf.votedFor = -1
+	}
+	reply.Term = args.Term //update the term according to the arguments
+
+	if args.PrevLogIndex > rf.lastIndex() {
+		reply.NextIndex = rf.lastIndex() + 1
+		return
+	}
+
+	base := rf.log[0].logID
+	//When we send the appendEntries request, we only call it successful
+	//if the leader or the primary is ahead in commits over the replicas.
+	if args.PrevLogIndex < base {
+
+	} else if args.LeaderCommit == rf.commitIndex {
+		rf.log = rf.log[:args.PrevLogIndex+1-base]
+		rf.log = append(rf.log, args.Entries...) //append the entries to the replicas
+		reply.Successful = true
+		reply.NextIndex = rf.lastIndex() + 1
+	} else {
+		last := rf.lastIndex()
+		if args.LeaderCommit > last {
+			rf.commitIndex = last
+		} else {
+			rf.commitIndex = args.LeaderCommit
+		}
+	}
+	return
+}
+
 //
 // the service or tester wants to create a Raft server. the ports
 // of all the Raft servers (including this one) are in peers[]. this

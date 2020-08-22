@@ -18,8 +18,12 @@ package raft
 //
 
 import (
+	"bytes"
+	"encoding/gob"
+	"math/rand"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"../labrpc"
 )
@@ -101,36 +105,27 @@ func (rf *Raft) GetState() (int, bool) {
 // see paper's Figure 2 for a description of what should be persistent.
 //
 func (rf *Raft) persist() {
-	// Your code here (2C).
-	// Example:
-	// w := new(bytes.Buffer)
-	// e := labgob.NewEncoder(w)
-	// e.Encode(rf.xxx)
-	// e.Encode(rf.yyy)
-	// data := w.Bytes()
-	// rf.persister.SaveRaftState(data)
+	w := new(bytes.Buffer)
+	e := gob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	data := w.Bytes()
+	rf.persister.SaveRaftState(data)
 }
 
 //
 // restore previously persisted state.
 //
 func (rf *Raft) readPersist(data []byte) {
+	//Example:
 	if data == nil || len(data) < 1 { // bootstrap without any state?
 		return
 	}
-	// Your code here (2C).
-	// Example:
-	// r := bytes.NewBuffer(data)
-	// d := labgob.NewDecoder(r)
-	// var xxx
-	// var yyy
-	// if d.Decode(&xxx) != nil ||
-	//    d.Decode(&yyy) != nil {
-	//   error...
-	// } else {
-	//   rf.xxx = xxx
-	//   rf.yyy = yyy
-	// }
+	r := bytes.NewBuffer(data)
+	d := gob.NewDecoder(r)
+	d.Decode(&rf.currentTerm)
+	d.Decode(&rf.votedFor)
+	d.Decode(&rf.log)
 }
 
 //
@@ -173,7 +168,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			rf.state = FOLLOWER
 			reply.VoteGranted = true
 			rf.votedFor = args.CandidateID
-			//fmt.Printf("%v currentTerm:%v vote for:%v term:%v",rf.me,rf.currentTerm,args.CandidateId,args.Term)
 		}
 	}
 }
@@ -234,13 +228,21 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 // the leader.
 //
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 	index := -1
-	term := -1
-	isLeader := true
+	term := rf.currentTerm
+	isleader := false
+	if rf.state == LEADER {
+		isleader = true
+	}
+	if isleader {
+		index = rf.lastIndex() + 1
+		rf.log = append(rf.log, LogEntry{termID: term}) // append new entry from client
+		rf.persist()
+	}
 
-	// Your code here (2B).
-
-	return index, term, isLeader
+	return index, term, isleader
 }
 
 //
@@ -281,8 +283,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.peers = peers
 	rf.persister = persister
 	rf.me = me
-
-	// Your initialization code here (2A, 2B, 2C).
 	rf.state = FOLLOWER
 	rf.heartbeat = make(chan bool, 100)
 	rf.votedFor = -1
@@ -294,5 +294,65 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
+	go func() { //start t
+		for {
+			if rf.state == FOLLOWER {
+				select {
+				case <-rf.heartbeat:
+				case <-rf.grantedVote:
+				case <-time.After(time.Duration(rand.Int63()%333+550) * time.Millisecond):
+					rf.state = CANDIDATE //after a certain amount of time, it becomes a candidate
+				}
+			}
+			if rf.state == LEADER {
+				//fmt.Printf("Leader:%v %v\n",rf.me,"boatcastAppendEntries	")
+				time.Sleep(1000)
+			}
+			if rf.state == CANDIDATE {
+				rf.mu.Lock()
+				rf.currentTerm++
+				rf.votedFor = rf.me
+				rf.persist()
+				rf.mu.Unlock()
+				//fmt.Printf("%v become CANDIDATE %v\n",rf.me,rf.currentTerm)
+				select {
+				case <-time.After(time.Duration(rand.Int63()%333+550) * time.Millisecond):
+				case <-rf.heartbeat:
+					rf.state = FOLLOWER
+				//	fmt.Printf("CANDIDATE %v reveive chanHeartbeat\n",rf.me)
+				case <-rf.leaderchan:
+					rf.mu.Lock()
+					rf.state = LEADER
+					//fmt.Printf("%v is Leader\n",rf.me)
+					rf.nextIndex = make([]int, len(rf.peers))
+					rf.matchIndex = make([]int, len(rf.peers))
+					for i := range rf.peers {
+						rf.nextIndex[i] = rf.lastIndex() + 1
+						rf.matchIndex[i] = 0
+					}
+					rf.mu.Unlock()
+					//rf.boatcastAppendEntries()
+				}
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-rf.commitchan:
+				rf.mu.Lock()
+				commitIndex := rf.commitIndex
+				baseIndex := rf.log[0].logID
+				for i := rf.lastApplied + 1; i <= commitIndex; i++ {
+					msg := ApplyMsg{Command: rf.log[i-baseIndex].command}
+					applyCh <- msg
+					//fmt.Printf("me:%d %v\n",rf.me,msg)
+					rf.lastApplied = i
+				}
+				rf.mu.Unlock()
+			}
+		}
+	}()
 	return rf
 }

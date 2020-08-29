@@ -7,8 +7,7 @@ with the plugins. The code snippets are truncated to provide simplicity and only
 
 ## Project: MapReduce WordCounter
 MapReduce is a program that utilizes a distributed system of two different threads (would be many many machines in the case of large-scale, real-world application) 
-to count the number of occurences of unique words in a .txt file. The worker threads Maps the input (puts each word in a map with the value being the occurence) and 
-sends them to the master. The worker threads also Reduces (hence the name) meaning that it tallies up everything into a single map instance to count the total.
+to count the number of occurences of unique words in a .txt file. The worker threads Maps the input (puts each word in a map with the value being the occurence) and sends them to the master. The worker threads also Reduces (hence the name) meaning that it tallies up everything into a single map instance to count the total. To learn more about MapReduce and how it was implemented at Google, check out this paper by Jeffrey Dean and Sanjay Ghemawat: [paper](https://pdos.csail.mit.edu/6.824/papers/mapreduce.pdf).
 To test this program out, in the **/src/main** directory, run:
 ```bash
 $ go build -buildmode=plugin ../mrapps/wc.go
